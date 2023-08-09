@@ -17,6 +17,7 @@
  * limitations under the License.
  */
 #pragma once
+#include <hip/hip_runtime.h>
 
 #include "attention_generic.cuh"
 #include "dtype_float32.cuh"
@@ -64,19 +65,20 @@ struct FloatVec<uint4> {
 // Utility functions for type conversions.
 inline __device__ uint32_t h0_h0(uint16_t a) {
   uint32_t b;
-  asm volatile("mov.b32 %0, {%1, %1};" : "=r"(b) : "h"(a));
+  asm volatile("s_mov_b32 %0, {%1, %1};" : "=v"(b) : "v"(a));
   return b;
 }
 
 inline __device__ float half_to_float(uint16_t h) {
   float f;
-  asm volatile("cvt.f32.f16 %0, %1;\n" : "=f"(f) : "h"(h));
+  asm volatile("v_cvt_f32_f16 %0, %1;\n" : "=v"(f) : "v"(h));
   return f;
 }
 
 inline __device__ float2 half2_to_float2(uint32_t v) {
   uint16_t lo, hi;
-  asm volatile("mov.b32 {%0, %1}, %2;\n" : "=h"(lo), "=h"(hi) : "r"(v));
+  asm volatile("v_cvt_f32_f16 %0, %2;\n" : "=v"(lo), "=v"(hi) : "v"(v));
+  asm volatile("v_cvt_f32_f16 %1, %2;\n" : "=v"(lo), "=v"(hi) : "v"(v));
   return make_float2(half_to_float(lo), half_to_float(hi));
 }
 
@@ -85,7 +87,7 @@ inline __device__ uint16_t float_to_half(float f) {
     uint32_t u32;
     uint16_t u16[2];
   } tmp;
-  asm volatile("cvt.rn.f16.f32 %0, %1;\n" : "=h"(tmp.u16[0]) : "f"(f));
+  asm volatile("v_cvt_f16_f32 %0, %1;\n" : "=v"(tmp.u16[0]) : "v"(f));
   return tmp.u16[0];
 }
 
@@ -95,11 +97,11 @@ inline __device__ uint32_t float2_to_half2(float2 f) {
     uint16_t u16[2];
   } tmp;
 
-#if defined(__CUDA_ARCH__) && __CUDA_ARCH__ >= 800
-  asm volatile("cvt.rn.f16x2.f32 %0, %1, %2;\n" : "=r"(tmp.u32) : "f"(f.y), "f"(f.x));
+#if defined(__HIP_ARCH__) && __HIP_ARCH__ >= 908
+  asm volatile("v_cvt_f16_f32_x2 %0, %1, %2;\n" : "=v"(tmp.u32) : "v"(f.y), "v"(f.x));
 #else
-  asm volatile("cvt.rn.f16.f32 %0, %1;\n" : "=h"(tmp.u16[0]) : "f"(f.x));
-  asm volatile("cvt.rn.f16.f32 %0, %1;\n" : "=h"(tmp.u16[1]) : "f"(f.y));
+  asm volatile("v_cvt_f16_f32 %0, %1;\n" : "=v"(tmp.u16[0]) : "v"(f.x));
+  asm volatile("v_cvt_f16_f32 %0, %1;\n" : "=v"(tmp.u16[1]) : "v"(f.y));
 #endif
   return tmp.u32;
 }
@@ -107,13 +109,13 @@ inline __device__ uint32_t float2_to_half2(float2 f) {
 // Vector addition.
 inline __device__ uint16_t add(uint16_t a, uint16_t b) {
   uint16_t c;
-  asm volatile("add.f16 %0, %1, %2;\n" : "=h"(c) : "h"(a), "h"(b));
+  asm volatile("v_add_f16 %0, %1, %2;\n" : "=v"(c) : "v"(a), "v"(b));
   return c;
 }
 
 inline __device__ uint32_t add(uint32_t a, uint32_t b) {
   uint32_t c;
-  asm volatile("add.f16x2 %0, %1, %2;\n" : "=r"(c) : "r"(a), "r"(b));
+  asm volatile("v_add_f16 %0, %1, %2;\n" : "=v"(c) : "v"(a), "v"(b));
   return c;
 }
 
@@ -158,14 +160,14 @@ inline __device__ Float8_ add(uint4 a, Float8_ fb) {
 template<>
 inline __device__ uint16_t mul(uint16_t a, uint16_t b) {
   uint16_t c;
-  asm volatile("mul.f16 %0, %1, %2;\n" : "=h"(c) : "h"(a), "h"(b));
+  asm volatile("mul.f16 %0, %1, %2;\n" : "=r"(c) : "r"(a), "r"(b));
   return c;
 }
 
 template<>
 inline __device__ uint32_t mul(uint32_t a, uint32_t b) {
   uint32_t c;
-  asm volatile("mul.f16x2 %0, %1, %2;\n" : "=r"(c) : "r"(a), "r"(b));
+  asm volatile("v_pk_fma_f16 %0, %1, %2, %0;\n" : "+v"(c) : "v"(a), "v"(b));
   return c;
 }
 

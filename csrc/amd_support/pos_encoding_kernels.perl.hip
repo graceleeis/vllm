@@ -1,6 +1,6 @@
 #include "hip/hip_runtime.h"
 #include <torch/extension.h>
-#include <ATen/cuda/HIPContext.h>
+#include <ATen/hip/HIPContext.h>
 
 namespace vllm {
 
@@ -34,8 +34,8 @@ __global__ void rotary_embedding_neox_kernel(
     const int out_x = token_idx * query_stride + head_idx * head_size + x_index;
     const int out_y = token_idx * query_stride + head_idx * head_size + y_index;
 
-    const scalar_t cos = __ldg(cache_ptr + x_index);
-    const scalar_t sin = __ldg(cache_ptr + y_index);
+    const scalar_t cos = __ldg((const char *)(cache_ptr + x_index));
+    const scalar_t sin = __ldg((const char *)(cache_ptr + y_index));
 
     const scalar_t q_x = query[token_head + x_index];
     const scalar_t q_y = query[token_head + y_index];
@@ -55,8 +55,8 @@ __global__ void rotary_embedding_neox_kernel(
     const int out_x = token_idx * key_stride + head_idx * head_size + x_index;
     const int out_y = token_idx * key_stride + head_idx * head_size + y_index;
 
-    const scalar_t cos = __ldg(cache_ptr + x_index);
-    const scalar_t sin = __ldg(cache_ptr + y_index);
+    const scalar_t cos = __ldg((const char *)(cache_ptr + x_index));
+    const scalar_t sin = __ldg((const char *)(cache_ptr + y_index));
 
     const scalar_t k_x = key[token_head + x_index];
     const scalar_t k_y = key[token_head + y_index];
@@ -83,7 +83,7 @@ void rotary_embedding_neox(
 
   dim3 grid(num_tokens);
   dim3 block(std::min(num_heads * rot_dim / 2, 512));
-  const hipStream_t stream = at::cuda::getCurrentCUDAStream();
+  const hipStream_t stream = at::cuda::getCurrentHIPStream();
   AT_DISPATCH_FLOATING_TYPES_AND2(
     at::ScalarType::Half,
     at::ScalarType::BFloat16,

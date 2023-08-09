@@ -1,6 +1,6 @@
 #include "hip/hip_runtime.h"
 #include <torch/extension.h>
-#include <ATen/cuda/HIPContext.h>
+#include <ATen/hip/HIPContext.h>
 
 namespace vllm {
 
@@ -17,8 +17,8 @@ __global__ void silu_and_mul_kernel(
   const int d) {
   const int token_idx = blockIdx.x;
   for (int idx = threadIdx.x; idx < d; idx += blockDim.x) {
-    const scalar_t x = __ldg(&input[token_idx * 2 * d + idx]);
-    const scalar_t y = __ldg(&input[token_idx * 2 * d + d + idx]);
+    const scalar_t x = __ldg((const char *)&input[token_idx * 2 * d + idx]);
+    const scalar_t y = __ldg((const char *)&input[token_idx * 2 * d + d + idx]);
     out[token_idx * d + idx] = silu(x) * y;
   }
 }
@@ -34,7 +34,7 @@ void silu_and_mul(
 
   dim3 grid(num_tokens);
   dim3 block(std::min(d, 1024));
-  const hipStream_t stream = at::cuda::getCurrentCUDAStream();
+  const hipStream_t stream = at::cuda::getCurrentHIPStream();
   AT_DISPATCH_FLOATING_TYPES_AND2(
     at::ScalarType::Half,
     at::ScalarType::BFloat16,
