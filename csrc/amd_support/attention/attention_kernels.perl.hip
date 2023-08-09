@@ -17,7 +17,7 @@
  * limitations under the License.
  */
 #include <torch/extension.h>
-#include <ATen/cuda/HIPContext.h>
+#include <ATen/hip/HIPContext.h>
 
 #include "attention_dtypes.h"
 #include "attention_utils.cuh"
@@ -40,7 +40,7 @@ inline __device__ float block_sum(float* red_smem, float sum) {
   // Compute the sum per warp.
 #pragma unroll
   for (int mask = WARP_SIZE / 2; mask >= 1; mask /= 2) {
-    sum += __shfl_xor_sync(uint32_t(-1), sum, mask);
+    sum += __shfl_xor(uint32_t(-1), sum, mask);
   }
 
   // Warp leaders store the data to shared memory.
@@ -59,11 +59,11 @@ inline __device__ float block_sum(float* red_smem, float sum) {
   // Parallel reduction inside the warp.
 #pragma unroll
   for (int mask = NUM_WARPS / 2; mask >= 1; mask /= 2) {
-    sum += __shfl_xor_sync(uint32_t(-1), sum, mask);
+    sum += __shfl_xor(uint32_t(-1), sum, mask);
   }
 
   // Broadcast to other threads.
-  return __shfl_sync(uint32_t(-1), sum, 0);
+  return __shfl(uint32_t(-1), sum, 0);
 }
 
 // Grid: (num_heads, num_seqs).
@@ -197,7 +197,7 @@ __global__ void single_query_cached_kv_attention_kernel(
   // The 0-th thread of each thread group already has its max qk value.
 #pragma unroll
   for (int mask = WARP_SIZE / 2; mask >= THREAD_GROUP_SIZE; mask /= 2) {
-    qk_max = fmaxf(qk_max, __shfl_xor_sync(uint32_t(-1), qk_max, mask));
+    qk_max = fmaxf(qk_max, __shfl_xor(uint32_t(-1), qk_max, mask));
   }
   if (lane == 0) {
     red_smem[warp_idx] = qk_max;
@@ -209,10 +209,10 @@ __global__ void single_query_cached_kv_attention_kernel(
   qk_max = lane < NUM_WARPS ? red_smem[lane] : -FLT_MAX;
 #pragma unroll
   for (int mask = NUM_WARPS / 2; mask >= 1; mask /= 2) {
-    qk_max = fmaxf(qk_max, __shfl_xor_sync(uint32_t(-1), qk_max, mask));
+    qk_max = fmaxf(qk_max, __shfl_xor(uint32_t(-1), qk_max, mask));
   }
   // Broadcast the max qk value to all threads.
-  qk_max = __shfl_sync(uint32_t(-1), qk_max, 0);
+  qk_max = __shfl(uint32_t(-1), qk_max, 0);
 
   // Get the sum of the exp values.
   float exp_sum = 0.f;
@@ -273,7 +273,7 @@ __global__ void single_query_cached_kv_attention_kernel(
     float acc = accs[i];
 #pragma unroll
     for (int mask = NUM_V_VECS_PER_ROW / 2; mask >= 1; mask /= 2) {
-      acc += __shfl_xor_sync(uint32_t(-1), acc, mask);
+      acc += __shfl_xor(uint32_t(-1), acc, mask);
     }
     accs[i] = acc;
   }
@@ -394,7 +394,7 @@ void single_query_cached_kv_attention_launcher(
 
   dim3 grid(num_heads, num_seqs);
   dim3 block(NUM_THREADS);
-  const hipStream_t stream = at::cuda::getCurrentCUDAStream();
+  const hipStream_t stream = at::cuda::getCurrentHIPStream();
   switch (head_size) {
     // NOTE(woosuk): To reduce the compilation time, we omitted head sizes
     // 32, 160, 192.
@@ -496,8 +496,6 @@ void single_query_cached_kv_attention(
     CALL_KERNEL_LAUNCHER_BLOCK_SIZE(float);
   } else if (query.dtype() == at::ScalarType::Half) {
     CALL_KERNEL_LAUNCHER_BLOCK_SIZE(uint16_t);
-  } else if (query.dtype() == at::ScalarType::BFloat16) {
-    CALL_KERNEL_LAUNCHER_BLOCK_SIZE(__nv_bfloat16);
   } else {
     TORCH_CHECK(false, "Unsupported data type: ", query.dtype());
   }

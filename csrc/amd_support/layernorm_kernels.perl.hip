@@ -1,6 +1,6 @@
 #include "hip/hip_runtime.h"
 #include <torch/extension.h>
-#include <ATen/cuda/HIPContext.h>
+#include <ATen/hip/HIPContext.h>
 
 #include "reduction_utils.cuh"
 
@@ -46,7 +46,7 @@ void rms_norm(
 
   dim3 grid(num_tokens);
   dim3 block(std::min(hidden_size, 1024));
-  const hipStream_t stream = at::cuda::getCurrentCUDAStream();
+  const hipStream_t stream = at::cuda::getCurrentHIPStream();
   AT_DISPATCH_FLOATING_TYPES_AND2(
     at::ScalarType::Half,
     at::ScalarType::BFloat16,

@@ -1,6 +1,6 @@
 #include "hip/hip_runtime.h"
 #include <torch/extension.h>
-#include <ATen/cuda/HIPContext.h>
+#include <ATen/hip/HIPContext.h>
 
 #include <algorithm>
 #include <cassert>
@@ -27,11 +27,11 @@ void swap_blocks(
     TORCH_CHECK(false, "Invalid device combination");
   }
 
-  void *src_ptr = src.data_ptr();
-  void *dst_ptr = dst.data_ptr();
+  char *src_ptr = (char *)src.data_ptr();
+  char *dst_ptr = (char *)dst.data_ptr();
 
   const int64_t block_size_in_bytes = src.element_size() * src[0].numel();
-  const hipStream_t stream = at::cuda::getCurrentCUDAStream();
+  const hipStream_t stream = at::cuda:: getCurrentHIPStream();
   // NOTE(woosuk): This can be slow if the number of blocks is large.
   for (const auto& pair : block_mapping) {
     int64_t src_block_number = pair.first;
@@ -125,7 +125,7 @@ void copy_blocks(
   const int numel_per_block = key_caches[0][0].numel();
   dim3 grid(num_layers, num_pairs);
   dim3 block(std::min(1024, numel_per_block));
-  const hipStream_t stream = at::cuda::getCurrentCUDAStream();
+  const hipStream_t stream = at::cuda::getCurrentHIPStream();
   AT_DISPATCH_FLOATING_TYPES_AND2(
     at::ScalarType::Half,
     at::ScalarType::BFloat16,
@@ -177,8 +177,8 @@ __global__ void reshape_and_cache_kernel(
                               + head_idx * head_size * block_size
                               + head_offset * block_size
                               + block_offset;
-    key_cache[tgt_key_idx] = __ldg(&key[src_key_idx]);
-    value_cache[tgt_value_idx] = __ldg(&value[src_value_idx]);
+    key_cache[tgt_key_idx] = __ldg((const char *)&key[src_key_idx]);
+    value_cache[tgt_value_idx] = __ldg((const char *)&value[src_value_idx]);
   }
 }
 
@@ -202,7 +202,7 @@ void reshape_and_cache(
 
   dim3 grid(num_tokens);
   dim3 block(std::min(num_heads * head_size, 512));
-  const hipStream_t stream = at::cuda::getCurrentCUDAStream();
+  const hipStream_t stream = at::cuda::getCurrentHIPStream();
   AT_DISPATCH_FLOATING_TYPES_AND2(
     at::ScalarType::Half,
     at::ScalarType::BFloat16,
@@ -331,8 +331,8 @@ __global__ void gather_cached_kv_kernel_optimized(
             src_key_indices[j] = src_key_idx;
             src_value_indices[j] = src_value_idx;
 
-            keys_to_store[j] = __ldg(&key_cache[src_key_idx]);
-            values_to_store[j] = __ldg(&value_cache[src_value_idx]);
+            keys_to_store[j] = __ldg((const char *)&key_cache[src_key_idx]);
+            values_to_store[j] = __ldg((const char *)&value_cache[src_value_idx]);
         }
 
         #pragma unroll
@@ -364,7 +364,7 @@ void gather_cached_kv(
 
   dim3 grid(num_tokens);
   dim3 block(std::min(num_heads * head_size, 512));
-  const hipStream_t stream = at::cuda::getCurrentCUDAStream();
+  const hipStream_t stream = at::cuda::getCurrentHIPStream();
   AT_DISPATCH_FLOATING_TYPES_AND2(
     at::ScalarType::Half,
     at::ScalarType::BFloat16,
@@ -385,3 +385,4 @@ void gather_cached_kv(
         x);
     });
 }
+
