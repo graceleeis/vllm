@@ -37,7 +37,6 @@ def get_nvcc_cuda_version(cuda_dir: str) -> Version:
     nvcc_cuda_version = parse(output[release_idx].split(",")[0])
     return nvcc_cuda_version
 
-
 # Collect the compute capabilities of all available GPUs.
 device_count = torch.cuda.device_count()
 compute_capabilities: Set[int] = set()
@@ -52,7 +51,8 @@ if not compute_capabilities:
     compute_capabilities = {70, 75, 80, 86, 90}
 # Add target compute capabilities to NVCC flags.
 for capability in compute_capabilities:
-    HIPCC_FLAGS += ["-gencode", f"arch=compute_{capability},code=sm_{capability}"]
+    # HIPCC_FLAGS += ["-gencode", f"arch=compute_{capability},code=sm_{capability}"]
+    HIPCC_FLAGS += ["-gencode"]
 
 # Validate the NVCC CUDA version.
 # nvcc_cuda_version = get_nvcc_cuda_version(ROCM_HOME)

@@ -99,27 +99,42 @@ class PagedAttention(nn.Module):
             value: shape = [num_prompt_tokens, num_kv_heads, head_size]
             input_metadata: metadata for paged attention.
         """
-
-        if self.num_kv_heads != self.num_heads:
-            # Project the key and value tensors to the desired number of heads.
-            key = torch.repeat_interleave(key, self.num_queries_per_kv, dim=1)
-            value = torch.repeat_interleave(value,
-                                            self.num_queries_per_kv,
-                                            dim=1)
-
-        # TODO(woosuk): The unsqueeze op may incur some CPU overhead. Optimize.
-        out = xops.memory_efficient_attention_forward(
-            query.unsqueeze(0),
-            key.unsqueeze(0),
-            value.unsqueeze(0),
-            attn_bias=input_metadata.attn_bias[0],
-            p=0.0,
-            scale=self.scale,
-            op=self.attn_op,
-        )
-        # TODO(woosuk): Unnecessary copy. Optimize.
+        attn_bias=input_metadata.attn_bias[0]
+        scores = torch.matmul(query, key.transpose(-2, -1))
+        p = 0.0
+        if self.scale is not None:
+            scores = scores / self.scale
+        # if attn_bias is not None:
+        #     scores += attn_bias
+        scores = torch.softmax(scores, dim=-1)
+        if p > 0.0:
+            scores = torch.dropout(scores, p=p, train=self.training)
+        # Compute output
+        out = torch.matmul(scores, value)
+        # out = out.sum(dim=-2)
         output.copy_(out.squeeze(0))
         return output
+
+        # if self.num_kv_heads != self.num_heads:
+        #     # Project the key and value tensors to the desired number of heads.
+        #     key = torch.repeat_interleave(key, self.num_queries_per_kv, dim=1)
+        #     value = torch.repeat_interleave(value,
+        #                                     self.num_queries_per_kv,
+        #                                     dim=1)
+
+        # # TODO(woosuk): The unsqueeze op may incur some CPU overhead. Optimize.
+        # out = xops.memory_efficient_attention_forward(
+        #     query.unsqueeze(0),
+        #     key.unsqueeze(0),
+        #     value.unsqueeze(0),
+        #     attn_bias=input_metadata.attn_bias[0],
+        #     p=0.0,
+        #     scale=self.scale,
+        #     op=self.attn_op,
+        # )
+        # # TODO(woosuk): Unnecessary copy. Optimize.
+        # output.copy_(out.squeeze(0))
+        # return output
 
     def single_query_cached_kv_attention(
         self,
