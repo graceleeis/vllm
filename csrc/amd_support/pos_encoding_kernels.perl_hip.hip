@@ -83,7 +83,12 @@ void rotary_embedding_neox(
 
   dim3 grid(num_tokens);
   dim3 block(std::min(num_heads * rot_dim / 2, 512));
-  const hipStream_t stream = at::cuda::getCurrentHIPStream();
+  // const hipStream_t stream = at::cuda::getCurrentHIPStream();
+  hipStream_t stream;
+  hipStreamCreate(&stream);
+  int device_id;
+  hipStreamGetDevice(&device_id, stream);
+
   AT_DISPATCH_FLOATING_TYPES_AND2(
     at::ScalarType::Half,
     at::ScalarType::BFloat16,
@@ -102,4 +107,5 @@ void rotary_embedding_neox(
         num_kv_heads,
         head_size);
     });
+    hipStreamDestroy(stream);
 }
