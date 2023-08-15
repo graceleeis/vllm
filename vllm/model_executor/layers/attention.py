@@ -7,10 +7,14 @@ from xformers import ops as xops
 from xformers.ops.fmha.attn_bias import (BlockDiagonalCausalMask,
                                          LowerTriangularMaskWithTensorBias)
 
-from vllm import attention_ops
+# from vllm import attention_ops
 from vllm import cache_ops
-from vllm import pos_encoding_ops
+# from vllm import pos_encoding_ops
 from vllm.model_executor.input_metadata import InputMetadata
+
+from vllm.amdSupport import RotaryEmbeddingNeox
+from vllm.amdSupport import single_query_cached_kv_attention as single_query_attention
+from vllm.amdSupport import multi_query_kv_attention as multi_query_attention
 
 _SUPPORTED_HEAD_SIZES = [64, 80, 96, 112, 128, 256]
 
@@ -108,17 +112,28 @@ class PagedAttention(nn.Module):
                                             dim=1)
 
         # TODO(woosuk): The unsqueeze op may incur some CPU overhead. Optimize.
-        out = xops.memory_efficient_attention_forward(
-            query.unsqueeze(0),
-            key.unsqueeze(0),
-            value.unsqueeze(0),
-            attn_bias=input_metadata.attn_bias[0],
-            p=0.0,
-            scale=self.scale,
-            op=self.attn_op,
+        # out = xops.memory_efficient_attention_forward(
+        #     query.unsqueeze(0),
+        #     key.unsqueeze(0),
+        #     value.unsqueeze(0),
+        #     attn_bias=input_metadata.attn_bias[0],
+        #     p=0.0,
+        #     scale=self.scale,
+        #     op=self.attn_op,
+        # )
+        cu_seq_lens = [0]
+        for seq_len in input_metadata.prompt_lens:
+            cu_seq_lens.append(cu_seq_lens[-1] + seq_len)
+        output = multi_query_attention(
+            cu_seq_lens,
+            query,
+            key,
+            value,
+            query.dtype,
         )
+
         # TODO(woosuk): Unnecessary copy. Optimize.
-        output.copy_(out.squeeze(0))
+        # output.copy_(out.squeeze(0))
         return output
 
     def single_query_cached_kv_attention(
@@ -141,18 +156,27 @@ class PagedAttention(nn.Module):
             input_metadata: metadata for paged attention.
         """
         block_size = value_cache.shape[3]
-        attention_ops.single_query_cached_kv_attention(
+        # attention_ops.single_query_cached_kv_attention(
+        #     output,
+        #     query,
+        #     key_cache,
+        #     value_cache,
+        #     self.head_mapping,
+        #     self.scale,
+        #     input_metadata.block_tables,
+        #     input_metadata.context_lens,
+        #     block_size,
+        #     input_metadata.max_context_len,
+        #     None,  # alibi_slopes
+        # ) #xr: change to python
+        output = torch.empty_like(query)
+        single_query_attention(
             output,
             query,
             key_cache,
             value_cache,
-            self.head_mapping,
-            self.scale,
             input_metadata.block_tables,
             input_metadata.context_lens,
-            block_size,
-            input_metadata.max_context_len,
-            None,  # alibi_slopes
         )
 
     def forward(
@@ -224,7 +248,8 @@ class PagedAttention(nn.Module):
                 key_cache,
                 value_cache,
                 input_metadata.slot_mapping,
-            )
+            ) #xr: this change to python
+            key_cache, value_cache = reshape_and_cache(num_valid_tokens, key[:num_valid_tokens], value[:num_valid_tokens], key_cache,value_cache, input_metadata.slot_mapping)
 
         if input_metadata.num_generation_tokens > 0:
             # Decoding run.
@@ -257,6 +282,9 @@ class PagedAttentionWithRoPE(PagedAttention):
         num_kv_heads: Optional[int] = None,
     ) -> None:
         super().__init__(num_heads, head_size, scale, num_kv_heads)
+        self.rotary_dim = rotary_dim
+        self.max_position = max_position
+        self.base = base
 
         # Create the cos and sin cache.
         inv_freq = 1.0 / (base**(torch.arange(0, rotary_dim, 2) / rotary_dim))
@@ -305,13 +333,26 @@ class PagedAttentionWithRoPE(PagedAttention):
 
         # Apply rotary embedding to the query and key before passing them
         # to the attention op.
-        pos_encoding_ops.rotary_embedding_neox(
+        # pos_encoding_ops.rotary_embedding_neox(
+        #     positions,
+        #     query,
+        #     key,
+        #     self.head_size,
+        #     self.cos_sin_cache,
+        # ) #xr: change to python
+        rotary_embedding = RotaryEmbeddingNeox(
+            dim=self.rotary_dim,
+            max_position_embeddings=self.max_position,
+            base=self.base,
+        ).to(device='cuda')
+        ref_query, ref_key = rotary_embedding(
             positions,
-            query,
-            key,
-            self.head_size,
-            self.cos_sin_cache,
+            query.view(-1, self.num_heads, self.head_size),
+            key.view(-1, self.num_heads, self.head_size),
         )
+        query = ref_query.view(-1, self.num_heads, self.head_size)
+        key = ref_key.view(-1, self.num_heads, self.head_size)
+
         return super().forward(
             query,
             key,
@@ -405,6 +446,16 @@ class PagedAttentionWithALiBi(PagedAttention):
                 scale=self.scale,
                 op=self.attn_op,
             )
+            # cu_seq_lens = [0]
+            # for seq_len in input_metadata.prompt_lens:
+            #     cu_seq_lens.append(cu_seq_lens[-1] + seq_len)
+            # out = ref_multi_query_attention(
+            #     cu_seq_lens,
+            #     query[None, start:end],
+            #     key[None, start:end],
+            #     value[None, start:end],
+            #     query.dtype,
+            # )
             # TODO(woosuk): Unnecessary copy. Optimize.
             output[start:end].copy_(out.squeeze(0))
             start += prompt_len
@@ -430,16 +481,25 @@ class PagedAttentionWithALiBi(PagedAttention):
             input_metadata: metadata for paged attention.
         """
         block_size = value_cache.shape[3]
-        attention_ops.single_query_cached_kv_attention(
+        # attention_ops.single_query_cached_kv_attention(
+        #     output,
+        #     query,
+        #     key_cache,
+        #     value_cache,
+        #     self.head_mapping,
+        #     self.scale,
+        #     input_metadata.block_tables,
+        #     input_metadata.context_lens,
+        #     block_size,
+        #     input_metadata.max_context_len,
+        #     self.alibi_slopes,
+        # )
+        output = torch.empty_like(query)
+        single_query_attention(
             output,
             query,
             key_cache,
             value_cache,
-            self.head_mapping,
-            self.scale,
             input_metadata.block_tables,
             input_metadata.context_lens,
-            block_size,
-            input_metadata.max_context_len,
-            self.alibi_slopes,
         )
