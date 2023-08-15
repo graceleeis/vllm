@@ -91,7 +91,7 @@ ext_modules.append(attention_extension)
 # Positional encoding kernels.
 positional_encoding_extension = CUDAExtension(
     name="vllm.pos_encoding_ops",
-    sources=["csrc/amd_support/pos_encoding.cpp", "csrc/amd_support/pos_encoding_kernels.perl.hip"],
+    sources=["csrc/amd_support/pos_encoding.cpp", "csrc/amd_support/pos_encoding_kernels.hip"],
     extra_compile_args={"cxx": CXX_FLAGS, "hipcc": HIPCC_FLAGS},
 )
 ext_modules.append(positional_encoding_extension)

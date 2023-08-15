@@ -1,4 +1,5 @@
-#include "hip/hip_runtime.h"
+#include <hip/hip_runtime.h>
+#include <hip/hip_runtime_api.h>
 #include <torch/extension.h>
 #include <ATen/hip/HIPContext.h>
 
@@ -83,11 +84,11 @@ void rotary_embedding_neox(
 
   dim3 grid(num_tokens);
   dim3 block(std::min(num_heads * rot_dim / 2, 512));
-  // const hipStream_t stream = at::cuda::getCurrentHIPStream();
-  hipStream_t stream;
-  hipStreamCreate(&stream);
-  int device_id;
-  hipStreamGetDevice(&device_id, stream);
+  const hipStream_t stream = at::cuda::getCurrentHIPStream();
+  // hipStream_t stream;
+  // hipStreamCreate(&stream);
+  // int device_id;
+  // hipStreamGetDevice(&device_id, stream);
 
   AT_DISPATCH_FLOATING_TYPES_AND2(
     at::ScalarType::Half,
@@ -95,7 +96,7 @@ void rotary_embedding_neox(
     query.scalar_type(),
     "rotary_embedding_neox",
     [&] {
-      vllm::rotary_embedding_neox_kernel<scalar_t><<<grid, block, 0, stream>>>(
+      vllm::rotary_embedding_neox_kernel<scalar_t><<<grid, block, 0, stream>>(
         positions.data_ptr<int64_t>(),
         query.data_ptr<scalar_t>(),
         key.data_ptr<scalar_t>(),
@@ -107,5 +108,5 @@ void rotary_embedding_neox(
         num_kv_heads,
         head_size);
     });
-    hipStreamDestroy(stream);
+    // hipStreamDestroy(stream);
 }
