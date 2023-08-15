@@ -2,7 +2,8 @@
 import torch
 import torch.nn as nn
 
-from vllm import activation_ops
+# from vllm import activation_ops
+from vllm.amdSupport import ref_silu_and_mul
 
 _ACTIVATION_REGISTRY = {
     "gelu": nn.GELU(),
@@ -36,5 +37,7 @@ class SiluAndMul(nn.Module):
         num_tokens = x.shape[0]
         d = x.shape[1] // 2
         out = torch.empty(num_tokens, d, dtype=x.dtype, device=x.device)
-        activation_ops.silu_and_mul(out, x)
+        # activation_ops.silu_and_mul(out, x)
+        out = ref_silu_and_mul(x)
+
         return out
