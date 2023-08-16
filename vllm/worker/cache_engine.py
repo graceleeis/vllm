@@ -137,7 +137,8 @@ class CacheEngine:
         key_caches = [key_cache for key_cache, _ in self.gpu_cache]
         value_caches = [value_cache for _, value_cache in self.gpu_cache]
         # NOTE(woosuk): This operation implicitly synchronizes the CPU and GPU.
-        cache_ops.copy_blocks(key_caches, value_caches, src_to_dsts)
+        # cache_ops.copy_blocks(key_caches, value_caches, src_to_dsts)
+        key_caches, value_caches = copy_blocks(key_caches, value_caches, src_to_dsts)
 
     @staticmethod
     def get_cache_block_size(

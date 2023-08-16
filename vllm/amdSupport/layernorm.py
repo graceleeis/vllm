@@ -4,11 +4,9 @@ import torch.nn as nn
 
 class RMSNorma(nn.Module):
 
-    def __init__(self, hidden_size, eps=1e-6):
+    def __init__(self,weight, eps):
         super().__init__()
-        weight = torch.empty(hidden_size)
-        weight.uniform_(-1e-3, 1e-3)
-        self.weight = nn.Parameter(weight)
+        self.weight = weight
         self.variance_epsilon = eps
 
     def forward(self, hidden_states):

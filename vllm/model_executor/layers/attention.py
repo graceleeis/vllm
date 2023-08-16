@@ -8,13 +8,14 @@ from xformers.ops.fmha.attn_bias import (BlockDiagonalCausalMask,
                                          LowerTriangularMaskWithTensorBias)
 
 # from vllm import attention_ops
-from vllm import cache_ops
+# from vllm import cache_ops
 # from vllm import pos_encoding_ops
 from vllm.model_executor.input_metadata import InputMetadata
 
 from vllm.amdSupport import RotaryEmbeddingNeox
 from vllm.amdSupport import single_query_cached_kv_attention as single_query_attention
 from vllm.amdSupport import multi_query_kv_attention as multi_query_attention
+from vllm.amdSupport import reshape_and_cache
 
 _SUPPORTED_HEAD_SIZES = [64, 80, 96, 112, 128, 256]
 
@@ -242,13 +243,13 @@ class PagedAttention(nn.Module):
         if (num_valid_tokens > 0 and key_cache is not None
                 and value_cache is not None):
             # The stride is 3 because the key and value are sliced from qkv.
-            cache_ops.reshape_and_cache(
-                key[:num_valid_tokens],
-                value[:num_valid_tokens],
-                key_cache,
-                value_cache,
-                input_metadata.slot_mapping,
-            ) #xr: this change to python
+            # cache_ops.reshape_and_cache(
+            #     key[:num_valid_tokens],
+            #     value[:num_valid_tokens],
+            #     key_cache,
+            #     value_cache,
+            #     input_metadata.slot_mapping,
+            # ) #xr: this change to python
             key_cache, value_cache = reshape_and_cache(num_valid_tokens, key[:num_valid_tokens], value[:num_valid_tokens], key_cache,value_cache, input_metadata.slot_mapping)
 
         if input_metadata.num_generation_tokens > 0:
@@ -347,11 +348,11 @@ class PagedAttentionWithRoPE(PagedAttention):
         ).to(device='cuda')
         ref_query, ref_key = rotary_embedding(
             positions,
-            query.view(-1, self.num_heads, self.head_size),
-            key.view(-1, self.num_heads, self.head_size),
+            query.view(positions.numel(), self.num_heads, self.head_size),
+            key.view(positions.numel(), self.num_heads, self.head_size),
         )
-        query = ref_query.view(-1, self.num_heads, self.head_size)
-        key = ref_key.view(-1, self.num_heads, self.head_size)
+        query = ref_query.view(positions.numel(), self.num_heads * self.head_size)
+        key = ref_key.view(positions.numel(), self.num_heads * self.head_size)
 
         return super().forward(
             query,
