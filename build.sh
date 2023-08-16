@@ -1,5 +1,5 @@
 #!/bin/bash -e
-clean=$0
+clean=$1./run
 if [ "$clean" == "clean" ]; then
     rm -rf build dist vllm.egg-info
 fi

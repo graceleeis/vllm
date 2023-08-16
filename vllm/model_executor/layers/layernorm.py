@@ -31,6 +31,7 @@ class RMSNorm(nn.Module):
         #     self.weight.data,
         #     self.variance_epsilon,
         # )
-        ref = RMSNorma(self.hidden_size).cuda()
+        # ref = RMSNorma(self.hidden_size).cuda()
+        ref = RMSNorma(self.weight.data, self.variance_epsilon).to(x.dtype).cuda()
         out = ref(x)
         return out
