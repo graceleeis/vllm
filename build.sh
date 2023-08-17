@@ -1,9 +1,10 @@
 #!/bin/bash -e
-clean=$1./run
+clean=$1
 if [ "$clean" == "clean" ]; then
     rm -rf build dist vllm.egg-info
 fi
 reset
+pip uninstall vllm -y
 python setup.py sdist
 python setup.py bdist_wheel
 cd dist
