@@ -7,6 +7,7 @@ from vllm import cache_ops
 from vllm.config import CacheConfig, ModelConfig, ParallelConfig
 from vllm.logger import init_logger
 from vllm.utils import in_wsl
+from vllm.amdSupport import copy_blocks
 
 logger = init_logger(__name__)
 
