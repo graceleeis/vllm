@@ -162,10 +162,36 @@ setuptools.setup(
         "License :: OSI Approved :: Apache Software License",
         "Topic :: Scientific/Engineering :: Artificial Intelligence",
     ],
+    dependency_links=[
+        'https://download.pytorch.org/whl/rocm5.4.2'
+    ],
     packages=setuptools.find_packages(
         exclude=("assets", "benchmarks", "csrc", "docs", "examples", "tests")),
     python_requires=">=3.8",
-    install_requires=get_requirements(),
+    install_requires=[get_requirements()],
+    # install_requires=[
+    #     'torch==2.0.0+rocm5.4.2; @https://download.pytorch.org/whl/rocm5.4.2',
+    #     "ninja",  # For faster builds.
+    #     "psutil",
+    #     "ray >= 2.5.1",
+    #     "sentencepiece",  # Required for LLaMA tokenizer.
+    #     "numpy",
+    #     "transformers >= 4.31.0",  # Required for LLaMA-2.
+    #     "fastapi",
+    #     "uvicorn",
+    # ],
+    # install_requires=[
+    # 'torch==2.0.0+rocm5.4.2@https://download.pytorch.org/whl/rocm5.4.2',
+    # "ninja",  # For faster builds.
+    # "psutil",
+    # "ray >= 2.5.1",
+    # "sentencepiece",  # Required for LLaMA tokenizer.
+    # "numpy",
+    # "transformers >= 4.31.0",  # Required for LLaMA-2.
+    # "fastapi",
+    # "uvicorn",
+    # ],
+    # install_requires=[get_requirements()],
     ext_modules=ext_modules,
     cmdclass={"build_ext": BuildExtension},
 )
