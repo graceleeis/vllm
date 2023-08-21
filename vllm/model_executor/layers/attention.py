@@ -156,7 +156,6 @@ class PagedAttention(nn.Module):
                 block_size]
             input_metadata: metadata for paged attention.
         """
-        # breakpoint()
         # block_size = value_cache.shape[3]
         # attention_ops.single_query_cached_kv_attention(
         #     output,
@@ -213,7 +212,6 @@ class PagedAttention(nn.Module):
         """
 
         # Reshape the query, key, and value tensors.
-        # breakpoint()
         query = query.view(-1, self.num_heads, self.head_size)
         key = key.view(-1, self.num_kv_heads, self.head_size)
         value = value.view(-1, self.num_kv_heads, self.head_size)
@@ -258,7 +256,6 @@ class PagedAttention(nn.Module):
 
         if input_metadata.num_generation_tokens > 0:
             # Decoding run.
-            # breakpoint()
             assert input_metadata.num_prompt_tokens == 0
             assert key_cache is not None and value_cache is not None, (
                 "key_cache and value_cache must be provided when "
@@ -346,7 +343,6 @@ class PagedAttentionWithRoPE(PagedAttention):
         #     self.head_size,
         #     self.cos_sin_cache,
         # ) #xr: change to python
-        # breakpoint()
         rotary_embedding = RotaryEmbeddingNeox(
             dim=self.rotary_dim,
             max_position_embeddings=self.max_position,

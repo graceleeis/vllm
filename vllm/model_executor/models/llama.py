@@ -167,7 +167,6 @@ class LlamaDecoderLayer(nn.Module):
         cache_event: Optional[torch.cuda.Event],
     ) -> torch.Tensor:
         # Self Attention
-        breakpoint()
         residual = hidden_states
         hidden_states = self.input_layernorm(hidden_states)
         hidden_states = self.self_attn(
@@ -251,7 +250,6 @@ class LlamaForCausalLM(nn.Module):
         input_metadata: InputMetadata,
         cache_events: Optional[List[torch.cuda.Event]],
     ) -> Dict[int, SequenceOutputs]:
-        breakpoint()
         hidden_states = self.model(input_ids, positions, kv_caches,
                                    input_metadata, cache_events)
         next_tokens = self.sampler(self.lm_head.weight, hidden_states,
