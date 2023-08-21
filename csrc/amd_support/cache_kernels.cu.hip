@@ -1,8 +1,6 @@
 #include "hip/hip_runtime.h"
 #include <torch/extension.h>
 #include <ATen/hip/HIPContext.h>
-#include <stdio.h>
-#include "hip/hip_fp16.h"
 
 #include <algorithm>
 #include <cassert>
@@ -29,10 +27,8 @@ void swap_blocks(
     TORCH_CHECK(false, "Invalid device combination");
   }
 
-  printf("xr Size of pointer: %zu",sizeof(src.data_ptr()));
   char *src_ptr = (char *)src.data_ptr();
   char *dst_ptr = (char *)dst.data_ptr();
-
 
   const int64_t block_size_in_bytes = src.element_size() * src[0].numel();
   const hipStream_t stream = at::cuda::getCurrentCUDAStream();
@@ -50,4 +46,3 @@ void swap_blocks(
       stream);
   }
 }
-
