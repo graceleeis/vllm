@@ -3,9 +3,9 @@ from typing import List, Optional
 
 import torch
 import torch.nn as nn
-from xformers import ops as xops
-from xformers.ops.fmha.attn_bias import (BlockDiagonalCausalMask,
-                                         LowerTriangularMaskWithTensorBias)
+# from xformers import ops as xops
+# from xformers.ops.fmha.attn_bias import (BlockDiagonalCausalMask,
+#                                          LowerTriangularMaskWithTensorBias)
 
 # from vllm import attention_ops
 # from vllm import cache_ops
@@ -66,7 +66,7 @@ class PagedAttention(nn.Module):
         self.num_heads = num_heads
         self.head_size = head_size
         self.scale = float(scale)
-        self.attn_op = xops.fmha.cutlass.FwOp()
+        # self.attn_op = xops.fmha.cutlass.FwOp()
         self.num_kv_heads = num_heads if num_kv_heads is None else num_kv_heads
 
         assert self.num_heads % self.num_kv_heads == 0
@@ -440,25 +440,25 @@ class PagedAttentionWithALiBi(PagedAttention):
         start = 0
         for i, prompt_len in enumerate(input_metadata.prompt_lens):
             end = start + prompt_len
-            out = xops.memory_efficient_attention_forward(
-                query[None, start:end],
-                key[None, start:end],
-                value[None, start:end],
-                attn_bias=input_metadata.attn_bias[i],
-                p=0.0,
-                scale=self.scale,
-                op=self.attn_op,
-            )
-            # cu_seq_lens = [0]
-            # for seq_len in input_metadata.prompt_lens:
-            #     cu_seq_lens.append(cu_seq_lens[-1] + seq_len)
-            # out = ref_multi_query_attention(
-            #     cu_seq_lens,
+            # out = xops.memory_efficient_attention_forward(
             #     query[None, start:end],
             #     key[None, start:end],
             #     value[None, start:end],
-            #     query.dtype,
+            #     attn_bias=input_metadata.attn_bias[i],
+            #     p=0.0,
+            #     scale=self.scale,
+            #     op=self.attn_op,
             # )
+            cu_seq_lens = [0]
+            for seq_len in input_metadata.prompt_lens:
+                cu_seq_lens.append(cu_seq_lens[-1] + seq_len)
+            out = multi_query_attention(
+                cu_seq_lens,
+                query[None, start:end],
+                key[None, start:end],
+                value[None, start:end],
+                query.dtype,
+            )
             # TODO(woosuk): Unnecessary copy. Optimize.
             output[start:end].copy_(out.squeeze(0))
             start += prompt_len
