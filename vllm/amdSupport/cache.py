@@ -14,6 +14,7 @@ def reshape_and_cache(
     block_size = value_cache.shape[-1]
     for i in range(num_tokens):
         reshaped_key = key.reshape(num_tokens, key_cache.shape[1], key_cache.shape[2], key_cache.shape[-1])
+        #xr: this takes long time
         block_idx = torch.div(slot_mapping[i],
                               block_size,
                               rounding_mode='floor')
