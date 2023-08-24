@@ -79,13 +79,13 @@ class PagedAttention(nn.Module):
             raise ValueError(f"head_size ({self.head_size}) is not supported. "
                              f"Supported head sizes: {_SUPPORTED_HEAD_SIZES}.")
 
-    def set_attn_bias(self, input_metadata: InputMetadata) -> None:
-        if input_metadata.attn_bias:
-            # Already set by a previous layer.
-            return
-        prompt_lens = input_metadata.prompt_lens
-        attn_bias = BlockDiagonalCausalMask.from_seqlens(prompt_lens)
-        input_metadata.attn_bias.append(attn_bias)
+    # def set_attn_bias(self, input_metadata: InputMetadata) -> None:
+    #     if input_metadata.attn_bias:
+    #         # Already set by a previous layer.
+    #         return
+    #     prompt_lens = input_metadata.prompt_lens
+    #     attn_bias = BlockDiagonalCausalMask.from_seqlens(prompt_lens)
+    #     input_metadata.attn_bias.append(attn_bias)
 
     def multi_query_kv_attention(
         self,
@@ -224,7 +224,7 @@ class PagedAttention(nn.Module):
         if num_prompt_tokens > 0:
             # Prompt run.
             assert input_metadata.num_generation_tokens == 0
-            self.set_attn_bias(input_metadata)
+            # self.set_attn_bias(input_metadata)
             self.multi_query_kv_attention(
                 output[:num_prompt_tokens],
                 query[:num_prompt_tokens],
@@ -382,33 +382,33 @@ class PagedAttentionWithALiBi(PagedAttention):
         slopes = torch.tensor(slopes, dtype=torch.float32)
         self.register_buffer("alibi_slopes", slopes, persistent=False)
 
-    def set_attn_bias(self, input_metadata: InputMetadata) -> None:
-        if input_metadata.attn_bias:
-            # Already set by a previous layer.
-            return
-        # Generates ALiBi mask for each prompt.
-        for prompt_len in input_metadata.prompt_lens:
-            bias = torch.arange(prompt_len)
-            # Note(zhuohan): HF uses
-            #     `bias = bias[None, :].repeat(prompt_len, 1)`
-            # here. We find that both biases give the same results, but
-            # the bias below more accurately follows the original ALiBi
-            # paper.
-            bias = bias[None, :] - bias[:, None]
-            bias = bias.to(self.alibi_slopes.device)
+    # def set_attn_bias(self, input_metadata: InputMetadata) -> None:
+    #     if input_metadata.attn_bias:
+    #         # Already set by a previous layer.
+    #         return
+    #     # Generates ALiBi mask for each prompt.
+    #     for prompt_len in input_metadata.prompt_lens:
+    #         bias = torch.arange(prompt_len)
+    #         # Note(zhuohan): HF uses
+    #         #     `bias = bias[None, :].repeat(prompt_len, 1)`
+    #         # here. We find that both biases give the same results, but
+    #         # the bias below more accurately follows the original ALiBi
+    #         # paper.
+    #         bias = bias[None, :] - bias[:, None]
+    #         bias = bias.to(self.alibi_slopes.device)
 
-            # When using custom attention bias, xformers requires the bias to
-            # be sliced from a tensor whose length is a multiple of 8.
-            padded_len = (prompt_len + 7) // 8 * 8
-            bias = torch.empty(
-                self.num_heads,
-                padded_len,
-                padded_len,
-                device=self.alibi_slopes.device,
-            )[:, :prompt_len, :prompt_len].copy_(bias)
-            bias.mul_(self.alibi_slopes[:, None, None])
-            attn_bias = LowerTriangularMaskWithTensorBias(bias)
-            input_metadata.attn_bias.append(attn_bias)
+    #         # When using custom attention bias, xformers requires the bias to
+    #         # be sliced from a tensor whose length is a multiple of 8.
+    #         padded_len = (prompt_len + 7) // 8 * 8
+    #         bias = torch.empty(
+    #             self.num_heads,
+    #             padded_len,
+    #             padded_len,
+    #             device=self.alibi_slopes.device,
+    #         )[:, :prompt_len, :prompt_len].copy_(bias)
+    #         bias.mul_(self.alibi_slopes[:, None, None])
+    #         attn_bias = LowerTriangularMaskWithTensorBias(bias)
+    #         input_metadata.attn_bias.append(attn_bias)
 
     def multi_query_kv_attention(
         self,

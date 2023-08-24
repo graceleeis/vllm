@@ -2,8 +2,8 @@ import random
 from typing import List, Optional
 
 import torch
-from xformers import ops as xops
-from xformers.ops.fmha.attn_bias import BlockDiagonalCausalMask
+# from xformers import ops as xops
+# from xformers.ops.fmha.attn_bias import BlockDiagonalCausalMask
 
 # from vllm import attention_ops
 
