@@ -75,11 +75,7 @@ ext_modules = []
 # Cache operations.
 cache_extension = CUDAExtension(
     name="vllm.cache_ops",
-<<<<<<< HEAD
     sources=["csrc/amd_support/cache.cpp", "csrc/amd_support/cache_kernels.cu.hip"],
-=======
-    sources=["csrc/amd_support/cache.cpp", "csrc/amd_support/cache_kernels.perl.hip"],
->>>>>>> 75b4353 (use native way)
     extra_compile_args={"cxx": CXX_FLAGS, "hipcc": HIPCC_FLAGS},
 )
 ext_modules.append(cache_extension)
