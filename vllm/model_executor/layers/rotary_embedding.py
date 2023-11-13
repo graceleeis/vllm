@@ -26,7 +26,7 @@ from typing import Tuple, Union
 import torch
 import torch.nn as nn
 
-from vllm import pos_encoding_ops
+from vllm.amd_support import RotaryEmbeddingNeox
 
 
 class RotaryEmbedding(nn.Module):
@@ -88,9 +88,23 @@ class RotaryEmbedding(nn.Module):
     ) -> Tuple[torch.Tensor, torch.Tensor]:
         # pos_encoding_ops.rotary_embedding() is an in-place operation that
         # updates the query and key tensors.
-        pos_encoding_ops.rotary_embedding(positions, query, key,
-                                          self.head_size, self.cos_sin_cache,
-                                          self.is_neox_style)
+        # pos_encoding_ops.rotary_embedding(positions, query, key,
+        #                                   self.head_size, self.cos_sin_cache,
+        #                                   self.is_neox_style)
+        rotary_embedding = RotaryEmbeddingNeox(
+            dim=self.rotary_dim,
+            max_position_embeddings=self.max_position_embeddings,
+            is_neox_style=self.is_neox_style,
+            base=self.base,
+        ).to(device="cuda")
+        num_heads = query.shape[0] // self.head_size
+        ref_query, ref_key = rotary_embedding(
+            positions,
+            query.view(positions.numel(), num_heads, self.head_size),
+            key.view(positions.numel(), num_heads, self.head_size),
+        )
+        query = ref_query.view(positions.numel(), num_heads * self.head_size)
+        key = ref_key.view(positions.numel(), num_heads * self.head_size)
         return query, key
 
 
